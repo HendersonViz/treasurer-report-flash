@@ -1,0 +1,20 @@
+Treasurer Flash
+
+Turn monthly financial exports into a board-ready finance update.
+
+Core user
+
+Volunteer treasurers, NPO finance people, club boards, small charities, societies, associations, and community organizations.
+
+Basic workflow
+Upload monthly income statement
+Upload balance sheet
+Upload budget-to-actual report, optional
+Add a few treasurer notes
+Generate:
+board-ready financial summary
+cash position
+major variances
+risks/issues
+decisions needed
+plain-English commentary
