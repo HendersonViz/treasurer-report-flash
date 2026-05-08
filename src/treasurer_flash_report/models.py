@@ -27,6 +27,21 @@ class Variance:
 
 
 @dataclass(frozen=True)
+class CashSummaryLine:
+    label: str
+    current: Money
+    prior: Money
+
+
+@dataclass(frozen=True)
+class SignificantTransaction:
+    transaction_date: date
+    item: str
+    description: str
+    amount: Money
+
+
+@dataclass(frozen=True)
 class TrialBalanceRow:
     account_number: str
     account_description: str
@@ -65,9 +80,15 @@ class ChequeLogRow:
 class FlashReport:
     organization_name: str
     report_title: str
+    current_period: str | None = None
+    comparative_period: str | None = None
+    balance_sheet_date: str | None = None
+    comparative_balance_sheet_date: str | None = None
     treasurer_notes: list[str] = field(default_factory=list)
     income_statement: list[ComparativeLine] = field(default_factory=list)
     balance_sheet: list[ComparativeLine] = field(default_factory=list)
+    cash_summary: list[CashSummaryLine] = field(default_factory=list)
+    significant_transactions: list[SignificantTransaction] = field(default_factory=list)
     major_variances: list[Variance] = field(default_factory=list)
     risks_and_issues: list[str] = field(default_factory=list)
     decisions_needed: list[str] = field(default_factory=list)

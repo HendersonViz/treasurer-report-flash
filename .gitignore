@@ -16,9 +16,13 @@ venv/
 .env
 .env.*
 
+# Logos/branding
+*.jpg
+
 # Sage/exported financial data
 *.xls
 *.xlsx
+*.docx
 data/training/*
 !data/training/.gitkeep
 

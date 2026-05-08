@@ -16,6 +16,7 @@ DEFAULT_INPUT_DIR = Path("data/training")
 DEFAULT_OUTPUT_DIR = Path("reports/out")
 DEFAULT_INCOME_FILENAME = "IncomeApr26.xlsx"
 DEFAULT_BALANCE_FILENAME = "BalanceApr26.xlsx"
+DEFAULT_LEDGER_FILENAME = "LedgerApr26.xlsx"
 DEFAULT_NOTES_FILENAME = "notes.md"
 DEFAULT_HTML_FILENAME = "flash-report.html"
 DEFAULT_PDF_FILENAME = "flash-report.pdf"
@@ -35,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         report = build_flash_report(
             income_path=paths.income,
             balance_path=paths.balance,
+            ledger_path=paths.ledger,
             notes_path=paths.notes,
             variance_amount_threshold=amount_threshold,
             variance_percent_threshold=percent_threshold,
@@ -81,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Folder containing Sage dump files. Defaults to data/training and expects "
             f"{DEFAULT_INCOME_FILENAME}, {DEFAULT_BALANCE_FILENAME}, and optional "
-            f"{DEFAULT_NOTES_FILENAME}."
+            f"{DEFAULT_LEDGER_FILENAME} and {DEFAULT_NOTES_FILENAME}."
         ),
     )
     parser.add_argument(
@@ -99,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--notes", type=Path, help="Markdown notes file override")
     parser.add_argument("--income", type=Path, help="Income statement override")
     parser.add_argument("--balance", type=Path, help="Balance sheet override")
+    parser.add_argument("--ledger", type=Path, help="General ledger override")
     parser.add_argument("--output", type=Path, help="HTML output path override")
     parser.add_argument("--pdf", type=Path, help="PDF output path override")
     parser.add_argument(
@@ -122,6 +125,7 @@ class CliPaths:
         output_dir: Path,
         income: Path,
         balance: Path,
+        ledger: Path | None,
         notes: Path | None,
         default_notes: Path,
         html_output: Path,
@@ -131,6 +135,7 @@ class CliPaths:
         self.output_dir = output_dir
         self.income = income
         self.balance = balance
+        self.ledger = ledger
         self.notes = notes
         self.default_notes = default_notes
         self.html_output = html_output
@@ -151,10 +156,15 @@ def doctor(paths: CliPaths, deliverable: str) -> int:
             missing_required = True
 
     notes_path = paths.notes or paths.default_notes
+    ledger_path = paths.ledger or paths.input_dir / DEFAULT_LEDGER_FILENAME
     if notes_path.exists():
         print(f"OK {notes_path.name}")
     else:
         print(f"optional {DEFAULT_NOTES_FILENAME} not found")
+    if ledger_path.exists():
+        print(f"OK {ledger_path.name}")
+    else:
+        print(f"optional {DEFAULT_LEDGER_FILENAME} not found")
 
     print()
     print("Will write:")
@@ -170,15 +180,20 @@ def _resolve_paths(args: argparse.Namespace) -> CliPaths:
     input_dir = args.input_dir
     output_dir = args.output_dir
     default_notes = input_dir / DEFAULT_NOTES_FILENAME
+    default_ledger = input_dir / DEFAULT_LEDGER_FILENAME
     notes_path = args.notes
     if notes_path is None and default_notes.exists():
         notes_path = default_notes
+    ledger_path = args.ledger
+    if ledger_path is None and default_ledger.exists():
+        ledger_path = default_ledger
 
     return CliPaths(
         input_dir=input_dir,
         output_dir=output_dir,
         income=args.income or input_dir / DEFAULT_INCOME_FILENAME,
         balance=args.balance or input_dir / DEFAULT_BALANCE_FILENAME,
+        ledger=ledger_path,
         notes=notes_path,
         default_notes=default_notes,
         html_output=args.output or output_dir / DEFAULT_HTML_FILENAME,

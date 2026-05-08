@@ -28,6 +28,7 @@ def test_cli_writes_html_report_with_training_files(tmp_path: Path) -> None:
     html = output_path.read_text(encoding="utf-8")
     assert "Dartmouth Curling Club" in html
     assert "Decisions Needed" in html
+    assert "Significant Transactions" in html
 
 
 def test_cli_keeps_explicit_path_overrides(tmp_path: Path) -> None:
@@ -45,6 +46,8 @@ def test_cli_keeps_explicit_path_overrides(tmp_path: Path) -> None:
             str(training_dir / "IncomeApr26.xlsx"),
             "--balance",
             str(training_dir / "BalanceApr26.xlsx"),
+            "--ledger",
+            str(training_dir / "LedgerApr26.xlsx"),
             "--notes",
             str(notes_path),
             "--output",
@@ -68,6 +71,7 @@ def test_cli_doctor_reports_expected_inputs_and_outputs(capsys) -> None:
     assert "Input folder: data/training" in output
     assert "OK IncomeApr26.xlsx" in output
     assert "OK BalanceApr26.xlsx" in output
+    assert "OK LedgerApr26.xlsx" in output
     assert "reports/out/flash-report.html" in output
 
 
@@ -78,3 +82,4 @@ def test_cli_doctor_fails_when_required_files_are_missing(tmp_path: Path, capsys
     output = capsys.readouterr().out
     assert "MISSING IncomeApr26.xlsx" in output
     assert "MISSING BalanceApr26.xlsx" in output
+    assert "optional LedgerApr26.xlsx not found" in output

@@ -28,6 +28,16 @@ def test_balance_sheet_comparative_spacer_columns_are_ignored() -> None:
     assert bank.prior == Decimal("37628.07")
 
 
+def test_comparative_periods_are_read_from_report_header() -> None:
+    parser = Sage50WorkbookParser()
+
+    income_periods = parser.read_comparative_periods(TRAINING_DIR / "IncomeApr26.xlsx")
+    balance_periods = parser.read_comparative_periods(TRAINING_DIR / "BalanceApr26.xlsx")
+
+    assert income_periods == ("Actual 05/01/2025 to 04/30/2026", "Actual 05/01/2024 to 04/30/2025")
+    assert balance_periods == ("As at 04/30/2026", "As at 04/30/2025")
+
+
 def test_income_statement_percent_change_column_is_parsed() -> None:
     parser = Sage50WorkbookParser()
 
@@ -37,6 +47,25 @@ def test_income_statement_percent_change_column_is_parsed() -> None:
     assert one_game.section == "MEMBERSHIP"
     assert one_game.prior == Decimal("88843.87")
     assert one_game.percent_change == Decimal("-100.00")
+
+
+def test_income_statement_total_rows_use_alternate_amount_columns() -> None:
+    parser = Sage50WorkbookParser()
+
+    rows = parser.parse_income_statement(TRAINING_DIR / "IncomeApr26.xlsx")
+
+    total_revenue = next(row for row in rows if row.label == "TOTAL REVENUE")
+    total_expense = next(row for row in rows if row.label == "TOTAL EXPENSE")
+    net_income = next(row for row in rows if row.label == "NET INCOME")
+    assert total_revenue.section == "REVENUE"
+    assert total_revenue.current == Decimal("112895.56")
+    assert total_revenue.prior == Decimal("450689.50")
+    assert total_expense.section == "EXPENSE"
+    assert total_expense.current == Decimal("202569.11")
+    assert total_expense.prior == Decimal("421757.86")
+    assert net_income.section == "NET RESULT"
+    assert net_income.current == Decimal("-89673.55")
+    assert net_income.prior == Decimal("28931.64")
 
 
 def test_trial_balance_flat_table_starts_after_report_headers() -> None:

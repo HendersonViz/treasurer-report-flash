@@ -13,7 +13,8 @@ ignored by git because they may contain financial data.
   ledger, and cheque log exports.
 - Normalize report headers, comparative spacer columns, Excel serial dates, and
   sparse/hierarchical ledger rows.
-- Render an email-friendly HTML flash report.
+- Render an email-friendly HTML flash report with cash summary, major variances,
+  significant ledger transactions, and period disclosure.
 - Keep PDF generation optional through WeasyPrint so parsing can be tested
   independently.
 
@@ -31,6 +32,7 @@ Put the standard Sage dump files in one folder:
 
 - `IncomeApr26.xlsx`
 - `BalanceApr26.xlsx`
+- optional `LedgerApr26.xlsx`
 - optional `notes.md`
 
 Check the folder before generating:
@@ -56,7 +58,7 @@ treasurer-flash-report --input-dir data/training --deliverable both
 Outputs default to `reports/out/flash-report.html` and
 `reports/out/flash-report.pdf`. Use `--output-dir` to change the folder, or
 advanced overrides like `--income`, `--balance`, `--notes`, `--output`, and
-`--pdf` when needed.
+`--ledger`, `--output`, and `--pdf` when needed.
 
 ## Shortcuts
 

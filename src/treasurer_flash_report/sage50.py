@@ -24,6 +24,14 @@ class Sage50WorkbookParser:
         report_title = _text(df.iat[1, 0]) if len(df.index) > 1 else None
         return organization_name or "Organization", report_title or "Treasurer Flash Report"
 
+    def read_comparative_periods(self, path: str | Path) -> tuple[str | None, str | None]:
+        df = self.read_sheet(path)
+        if len(df.index) <= 3:
+            return None, None
+        current_period = _text(df.iat[3, 1]) if len(df.columns) > 1 else None
+        comparative_period = _text(df.iat[3, 3]) if len(df.columns) > 3 else None
+        return current_period, comparative_period
+
     def parse_balance_sheet(self, path: str | Path) -> list[ComparativeLine]:
         return self._parse_comparative_report(path, has_percent_change=False)
 
@@ -127,8 +135,8 @@ class Sage50WorkbookParser:
             if not label or label.startswith("Generated On"):
                 continue
 
-            current = _optional_money(row.get(1))
-            prior = _optional_money(row.get(3))
+            current = _first_money(row.get(1), row.get(2))
+            prior = _first_money(row.get(3), row.get(4))
             percent = _optional_money(row.get(5)) if has_percent_change else None
 
             if current is None and prior is None and _looks_like_section(label):
@@ -140,7 +148,7 @@ class Sage50WorkbookParser:
 
             lines.append(
                 ComparativeLine(
-                    section=section,
+                    section=_section_for_line(label, section),
                     label=label,
                     current=current,
                     prior=prior,
@@ -181,6 +189,14 @@ def _optional_money(value: Any) -> Decimal | None:
         return None
 
 
+def _first_money(*values: Any) -> Decimal | None:
+    for value in values:
+        amount = _optional_money(value)
+        if amount is not None:
+            return amount
+    return None
+
+
 def _excel_date(value: Any) -> date | None:
     if pd.isna(value):
         return None
@@ -205,3 +221,14 @@ def _required_date(value: Any) -> date:
 def _looks_like_section(label: str) -> bool:
     letters = [char for char in label if char.isalpha()]
     return bool(letters) and label.upper() == label
+
+
+def _section_for_line(label: str, current_section: str) -> str:
+    normalized = label.strip().upper()
+    if normalized == "TOTAL REVENUE":
+        return "REVENUE"
+    if normalized == "TOTAL EXPENSE":
+        return "EXPENSE"
+    if normalized in {"NET INCOME", "NET LOSS"}:
+        return "NET RESULT"
+    return current_section
