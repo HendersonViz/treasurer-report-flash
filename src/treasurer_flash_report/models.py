@@ -27,6 +27,12 @@ class Variance:
 
 
 @dataclass(frozen=True)
+class VarianceGroup:
+    summary: Variance
+    drivers: list[Variance] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class CashSummaryLine:
     label: str
     current: Money
@@ -80,16 +86,22 @@ class ChequeLogRow:
 class FlashReport:
     organization_name: str
     report_title: str
+    sample_badge: str | None = None
+    footer_note: str | None = None
     current_period: str | None = None
     comparative_period: str | None = None
     balance_sheet_date: str | None = None
     comparative_balance_sheet_date: str | None = None
+    executive_snapshot: list[str] = field(default_factory=list)
+    executive_snapshot_html: str = ""
     treasurer_notes: list[str] = field(default_factory=list)
+    treasurer_notes_html: str = ""
     income_statement: list[ComparativeLine] = field(default_factory=list)
     balance_sheet: list[ComparativeLine] = field(default_factory=list)
     cash_summary: list[CashSummaryLine] = field(default_factory=list)
     significant_transactions: list[SignificantTransaction] = field(default_factory=list)
     major_variances: list[Variance] = field(default_factory=list)
+    major_variance_groups: list[VarianceGroup] = field(default_factory=list)
     risks_and_issues: list[str] = field(default_factory=list)
     decisions_needed: list[str] = field(default_factory=list)
     commentary: list[str] = field(default_factory=list)

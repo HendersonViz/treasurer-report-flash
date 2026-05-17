@@ -44,12 +44,14 @@ def test_render_html_contains_mvp_sections_and_escapes_notes() -> None:
     assert "Major Variances" in html
     assert "Risks / Issues" in html
     assert "Decisions Needed" in html
+    assert html.index("Treasurer Notes") < html.index("Financial Summary")
     assert "Income statement: Actual 04/01/2026 to 04/30/2026" in html
     assert "comparative: Actual 04/01/2025 to 04/30/2025" in html
     assert "Balance sheet: As at 04/30/2026" in html
     assert "data:image/jpeg;base64," in html
     assert "Cash Summary" in html
     assert "Significant Transactions" in html
+    assert "<th>Area</th><th>What changed</th>" in html
     assert "Payroll" in html
     assert "Use &lt;restricted&gt; funds carefully." in html
 
@@ -72,6 +74,6 @@ def test_render_html_places_net_result_below_major_variances() -> None:
     html = render_html(report)
 
     net_result_block = html.index('<div class="net-result">')
-    assert html.index("TOTAL REVENUE") < net_result_block
+    assert html.index("Total Revenue") < net_result_block
     assert net_result_block < html.index("NET INCOME")
-    assert "<td>NET RESULT</td>" in html
+    assert "<td>Net result</td>" in html

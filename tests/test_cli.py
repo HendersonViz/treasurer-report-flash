@@ -83,3 +83,19 @@ def test_cli_doctor_fails_when_required_files_are_missing(tmp_path: Path, capsys
     assert "MISSING IncomeApr26.xlsx" in output
     assert "MISSING BalanceApr26.xlsx" in output
     assert "optional LedgerApr26.xlsx not found" in output
+
+
+def test_cli_sample_writes_synthetic_shareable_html(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+
+    result = cli.main(["sample", "--output-dir", str(output_dir)])
+
+    assert result == 0
+    output_path = output_dir / "sample-flash-report.html"
+    html = output_path.read_text(encoding="utf-8")
+    assert "Hartwell Community Foundation" in html
+    assert "SAMPLE REPORT - Synthetic data only" in html
+    assert "synthetic data for demonstration purposes only" in html
+    assert "Dartmouth Curling Club" not in html
+    assert "data:image/jpeg;base64" not in html
+    assert 'class="sample-logo"' in html

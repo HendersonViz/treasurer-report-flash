@@ -11,6 +11,7 @@ from .builder import (
     build_flash_report,
 )
 from .reports import render_html, write_pdf
+from .sample import build_sample_flash_report
 
 DEFAULT_INPUT_DIR = Path("data/training")
 DEFAULT_OUTPUT_DIR = Path("reports/out")
@@ -20,6 +21,8 @@ DEFAULT_LEDGER_FILENAME = "LedgerApr26.xlsx"
 DEFAULT_NOTES_FILENAME = "notes.md"
 DEFAULT_HTML_FILENAME = "flash-report.html"
 DEFAULT_PDF_FILENAME = "flash-report.pdf"
+DEFAULT_SAMPLE_HTML_FILENAME = "sample-flash-report.html"
+DEFAULT_SAMPLE_PDF_FILENAME = "sample-flash-report.pdf"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,16 +34,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "doctor":
             return doctor(paths, args.deliverable)
 
-        amount_threshold = _decimal_arg(args.variance_amount_threshold)
-        percent_threshold = _decimal_arg(args.variance_percent_threshold)
-        report = build_flash_report(
-            income_path=paths.income,
-            balance_path=paths.balance,
-            ledger_path=paths.ledger,
-            notes_path=paths.notes,
-            variance_amount_threshold=amount_threshold,
-            variance_percent_threshold=percent_threshold,
-        )
+        if args.command == "sample":
+            report = build_sample_flash_report()
+        else:
+            amount_threshold = _decimal_arg(args.variance_amount_threshold)
+            percent_threshold = _decimal_arg(args.variance_percent_threshold)
+            report = build_flash_report(
+                income_path=paths.income,
+                balance_path=paths.balance,
+                ledger_path=paths.ledger,
+                notes_path=paths.notes,
+                variance_amount_threshold=amount_threshold,
+                variance_percent_threshold=percent_threshold,
+            )
 
         wrote_html = False
         wrote_pdf = False
@@ -72,9 +78,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("report", "doctor"),
         default="report",
-        help="Use 'doctor' to check expected files and outputs without generating a report.",
+        choices=("report", "doctor", "sample"),
+        help=(
+            "Use 'doctor' to check expected files and outputs, or 'sample' to generate "
+            "a synthetic shareable report."
+        ),
     )
     parser.add_argument(
         "--input-dir",
@@ -196,8 +205,8 @@ def _resolve_paths(args: argparse.Namespace) -> CliPaths:
         ledger=ledger_path,
         notes=notes_path,
         default_notes=default_notes,
-        html_output=args.output or output_dir / DEFAULT_HTML_FILENAME,
-        pdf_output=args.pdf or output_dir / DEFAULT_PDF_FILENAME,
+        html_output=args.output or output_dir / _default_html_filename(args.command),
+        pdf_output=args.pdf or output_dir / _default_pdf_filename(args.command),
     )
 
 
@@ -206,6 +215,18 @@ def _decimal_arg(value: str) -> Decimal:
         return Decimal(value)
     except InvalidOperation as exc:
         raise ValueError(f"Expected decimal threshold, got {value!r}") from exc
+
+
+def _default_html_filename(command: str) -> str:
+    if command == "sample":
+        return DEFAULT_SAMPLE_HTML_FILENAME
+    return DEFAULT_HTML_FILENAME
+
+
+def _default_pdf_filename(command: str) -> str:
+    if command == "sample":
+        return DEFAULT_SAMPLE_PDF_FILENAME
+    return DEFAULT_PDF_FILENAME
 
 
 if __name__ == "__main__":

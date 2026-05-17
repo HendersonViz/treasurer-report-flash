@@ -10,6 +10,13 @@ from .models import (
     LedgerEntry,
     SignificantTransaction,
     Variance,
+    VarianceGroup,
+)
+from .notes import (
+    extract_named_markdown_section,
+    extract_plain_notes,
+    read_notes_content,
+    render_safe_markdown,
 )
 from .sage50 import Sage50WorkbookParser
 
@@ -35,12 +42,17 @@ def build_flash_report(
     income_statement = parser.parse_income_statement(income_path)
     balance_sheet = parser.parse_balance_sheet(balance_path)
     ledger_entries = parser.parse_general_ledger(ledger_path) if ledger_path is not None else []
-    notes = read_notes(notes_path)
-    variances = find_major_variances(
+    notes_markdown = read_notes_content(notes_path)
+    snapshot_markdown, treasurer_notes_markdown = extract_named_markdown_section(
+        notes_markdown, {"executive snapshot"}
+    )
+    notes = extract_plain_notes(treasurer_notes_markdown)
+    variance_groups = find_major_variance_groups(
         income_statement,
         amount_threshold=variance_amount_threshold,
         percent_threshold=variance_percent_threshold,
     )
+    variances = [group.summary for group in variance_groups]
 
     report = FlashReport(
         organization_name=organization_name,
@@ -49,17 +61,23 @@ def build_flash_report(
         comparative_period=comparative_period,
         balance_sheet_date=balance_sheet_date,
         comparative_balance_sheet_date=comparative_balance_sheet_date,
+        executive_snapshot=extract_plain_notes(snapshot_markdown),
+        executive_snapshot_html=render_safe_markdown(snapshot_markdown),
         treasurer_notes=notes,
+        treasurer_notes_html=render_safe_markdown(treasurer_notes_markdown),
         income_statement=income_statement,
         balance_sheet=balance_sheet,
         cash_summary=build_cash_summary(balance_sheet),
         significant_transactions=find_significant_transactions(ledger_entries),
         major_variances=variances,
+        major_variance_groups=variance_groups,
         ledger_entries=ledger_entries,
     )
     report.risks_and_issues = build_risks_and_issues(report)
     report.decisions_needed = build_decisions_needed(notes)
     report.commentary = build_commentary(report)
+    if not report.executive_snapshot:
+        report.executive_snapshot = build_executive_snapshot(report)
     return report
 
 
@@ -129,35 +147,7 @@ def find_significant_transactions(
 
 
 def read_notes(notes_path: Path | None) -> list[str]:
-    if notes_path is None:
-        return []
-
-    content = notes_path.read_text(encoding="utf-8").splitlines()
-    notes: list[str] = []
-    current: list[str] = []
-
-    for line in content:
-        stripped = line.strip()
-        if not stripped:
-            if current:
-                notes.append(" ".join(current))
-                current = []
-            continue
-
-        stripped = stripped.lstrip("#").strip()
-        if stripped.startswith(("- ", "* ")):
-            if current:
-                notes.append(" ".join(current))
-                current = []
-            notes.append(stripped[2:].strip())
-            continue
-
-        current.append(stripped)
-
-    if current:
-        notes.append(" ".join(current))
-
-    return [note for note in notes if note]
+    return extract_plain_notes(read_notes_content(notes_path))
 
 
 def find_major_variances(
@@ -196,6 +186,95 @@ def find_major_variances(
         )
 
     return sorted(variances, key=lambda variance: abs(variance.change), reverse=True)
+
+
+def find_major_variance_groups(
+    lines: list[ComparativeLine],
+    *,
+    amount_threshold: Decimal,
+    percent_threshold: Decimal,
+    limit: int = 6,
+    driver_limit: int = 3,
+) -> list[VarianceGroup]:
+    variances = find_major_variances(
+        lines,
+        amount_threshold=amount_threshold,
+        percent_threshold=percent_threshold,
+    )
+    if not variances:
+        return []
+
+    statement_areas = _statement_area_map(lines)
+    consumed: set[tuple[str, str]] = set()
+    groups: list[VarianceGroup] = []
+
+    for area_name in ("REVENUE", "EXPENSE"):
+        total = next(
+            (
+                variance
+                for variance in variances
+                if variance.label.strip().upper() == f"TOTAL {area_name}"
+            ),
+            None,
+        )
+        if total is None:
+            continue
+
+        area_variances = [
+            variance
+            for variance in variances
+            if variance != total and statement_areas.get(_variance_key(variance)) == area_name
+        ]
+        drivers = sorted(
+            _representative_variances_by_section(area_variances),
+            key=lambda variance: abs(variance.change),
+            reverse=True,
+        )[:driver_limit]
+        groups.append(VarianceGroup(summary=total, drivers=drivers))
+        consumed.add(_variance_key(total))
+        consumed.update(_variance_key(variance) for variance in area_variances)
+
+    section_totals = {
+        _total_section_name(variance.label): variance
+        for variance in variances
+        if _is_total_line(variance.label) and _variance_key(variance) not in consumed
+    }
+    details_by_section: dict[str, list[Variance]] = {}
+    details_without_total: dict[str, list[Variance]] = {}
+
+    for variance in variances:
+        if _variance_key(variance) in consumed:
+            continue
+        if _is_total_line(variance.label):
+            continue
+        section_key = variance.section.strip().upper()
+        if section_key in section_totals:
+            details_by_section.setdefault(section_key, []).append(variance)
+        else:
+            details_without_total.setdefault(section_key, []).append(variance)
+
+    for section_key, total in section_totals.items():
+        drivers = sorted(
+            details_by_section.get(section_key, []),
+            key=lambda variance: abs(variance.change),
+            reverse=True,
+        )[:driver_limit]
+        groups.append(VarianceGroup(summary=total, drivers=drivers))
+
+    for detail_variances in details_without_total.values():
+        sorted_details = sorted(
+            detail_variances,
+            key=lambda variance: abs(variance.change),
+            reverse=True,
+        )
+        groups.append(
+            VarianceGroup(
+                summary=sorted_details[0],
+                drivers=sorted_details[1 : driver_limit + 1],
+            )
+        )
+
+    return sorted(groups, key=lambda group: abs(group.summary.change), reverse=True)[:limit]
 
 
 def build_risks_and_issues(report: FlashReport) -> list[str]:
@@ -252,6 +331,42 @@ def build_commentary(report: FlashReport) -> list[str]:
     return commentary
 
 
+def build_executive_snapshot(report: FlashReport) -> list[str]:
+    revenue = section_total(report.income_statement, "REVENUE")
+    expenses = section_total(report.income_statement, "EXPENSE")
+    net = net_result(report.income_statement)
+    cash = cash_position(report)
+    snapshot = [
+        f"Cash-like balances total {_currency(cash)}.",
+        (
+            f"Revenue is {_currency(revenue)} and expenses are {_currency(expenses)}, "
+            f"for a net result of {_currency(net)}."
+        ),
+    ]
+
+    revenue_group = _find_variance_group(report.major_variance_groups, "TOTAL REVENUE")
+    if revenue_group is not None:
+        snapshot.append(_variance_snapshot_line("Revenue", revenue_group))
+
+    expense_group = _find_variance_group(report.major_variance_groups, "TOTAL EXPENSE")
+    if expense_group is not None:
+        snapshot.append(_variance_snapshot_line("Expenses", expense_group))
+
+    decisions = [
+        decision
+        for decision in report.decisions_needed
+        if not decision.startswith("No board decisions")
+    ]
+    if decisions:
+        snapshot.append(f"Board attention requested: {decisions[0]}")
+    else:
+        snapshot.append(
+            "No board decisions were automatically identified from the treasurer notes."
+        )
+
+    return snapshot
+
+
 def section_total(lines: list[ComparativeLine], section_name: str) -> Decimal:
     section_name = section_name.upper()
     total_label = f"TOTAL {section_name}"
@@ -285,6 +400,8 @@ def cash_position(report: FlashReport) -> Decimal:
 
 
 def _currency(value: Decimal) -> str:
+    if value < 0:
+        return f"-${abs(value):,.2f}"
     return f"${value:,.2f}"
 
 
@@ -328,3 +445,85 @@ def _line_current(lines: list[ComparativeLine], label: str) -> Decimal | None:
         if line.label.strip().upper() == target and line.current is not None:
             return line.current
     return None
+
+
+def _is_total_line(label: str) -> bool:
+    return label.strip().upper().startswith("TOTAL ")
+
+
+def _total_section_name(label: str) -> str:
+    return label.strip().upper().removeprefix("TOTAL ").strip()
+
+
+def _statement_area_map(lines: list[ComparativeLine]) -> dict[tuple[str, str], str]:
+    areas: dict[tuple[str, str], str] = {}
+    current_area = "REVENUE"
+
+    for line in lines:
+        label = line.label.strip().upper()
+        if label in {"NET INCOME", "NET LOSS"}:
+            areas[(line.section, line.label)] = "NET RESULT"
+            continue
+        if label == "TOTAL REVENUE":
+            areas[(line.section, line.label)] = "REVENUE"
+            current_area = "EXPENSE"
+            continue
+        if label == "TOTAL EXPENSE":
+            areas[(line.section, line.label)] = "EXPENSE"
+            continue
+        areas[(line.section, line.label)] = current_area
+
+    return areas
+
+
+def _variance_key(variance: Variance) -> tuple[str, str]:
+    return variance.section, variance.label
+
+
+def _representative_variances_by_section(variances: list[Variance]) -> list[Variance]:
+    by_section: dict[str, list[Variance]] = {}
+    for variance in variances:
+        by_section.setdefault(variance.section.strip().upper(), []).append(variance)
+
+    representatives: list[Variance] = []
+    for section_variances in by_section.values():
+        total = next(
+            (variance for variance in section_variances if _is_total_line(variance.label)),
+            None,
+        )
+        if total is not None:
+            representatives.append(total)
+            continue
+        representatives.append(
+            max(section_variances, key=lambda variance: abs(variance.change))
+        )
+
+    return representatives
+
+
+def _find_variance_group(groups: list[VarianceGroup], label: str) -> VarianceGroup | None:
+    target = label.strip().upper()
+    for group in groups:
+        if group.summary.label.strip().upper() == target:
+            return group
+    return None
+
+
+def _variance_snapshot_line(area: str, group: VarianceGroup) -> str:
+    direction = "up" if group.summary.change > 0 else "down"
+    verb = "are" if area.endswith("s") else "is"
+    line = (
+        f"{area} {verb} {direction} {_currency(abs(group.summary.change))} "
+        "from the comparison period"
+    )
+    if group.drivers:
+        drivers = ", ".join(_display_label(driver.label) for driver in group.drivers[:3])
+        line = f"{line}, mainly driven by {drivers}"
+    return f"{line}."
+
+
+def _display_label(label: str) -> str:
+    stripped = label.strip()
+    if stripped.upper().startswith("TOTAL "):
+        return stripped[6:].title()
+    return stripped

@@ -2,8 +2,8 @@
 A way to
 
 ###
-- [ ] Map financial statements
-  - [ ] Revenues
+- [x] Map financial statements
+  - [x] Revenues
 - [ ] Task title ~3d #type @name yyyy-mm-dd
   - [ ] Sub-task or description
 

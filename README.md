@@ -15,6 +15,7 @@ ignored by git because they may contain financial data.
   sparse/hierarchical ledger rows.
 - Render an email-friendly HTML flash report with cash summary, major variances,
   significant ledger transactions, and period disclosure.
+- Render treasurer notes from safe Markdown near the start of the report.
 - Keep PDF generation optional through WeasyPrint so parsing can be tested
   independently.
 
@@ -34,6 +35,12 @@ Put the standard Sage dump files in one folder:
 - `BalanceApr26.xlsx`
 - optional `LedgerApr26.xlsx`
 - optional `notes.md`
+
+`notes.md` supports safe Markdown for treasurer narrative: headings, paragraphs,
+bullets, numbered lists, bold/italic text, and links. Raw HTML is escaped.
+Use a `## Executive Snapshot` section when you want to write the lead board
+summary yourself; if it is omitted, the report generates a snapshot from the
+uploaded statements and variance groups.
 
 Check the folder before generating:
 
