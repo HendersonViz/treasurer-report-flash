@@ -82,6 +82,23 @@ class ChequeLogRow:
     journal_entry_date: date | None
 
 
+@dataclass(frozen=True)
+class JournalLine:
+    statement: str
+    account: str
+    debit: Money = Decimal("0")
+    credit: Money = Decimal("0")
+    section: str | None = None
+    normal_balance: str | None = None
+
+
+@dataclass(frozen=True)
+class JournalEntry:
+    entry_date: date
+    description: str
+    lines: list[JournalLine]
+
+
 @dataclass
 class FlashReport:
     organization_name: str
@@ -108,3 +125,4 @@ class FlashReport:
     trial_balance: list[TrialBalanceRow] = field(default_factory=list)
     ledger_entries: list[LedgerEntry] = field(default_factory=list)
     cheque_log: list[ChequeLogRow] = field(default_factory=list)
+    adjustments: list[JournalEntry] = field(default_factory=list)

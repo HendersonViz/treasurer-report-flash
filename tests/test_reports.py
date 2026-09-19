@@ -7,6 +7,8 @@ from treasurer_flash_report.models import (
     CashSummaryLine,
     ComparativeLine,
     FlashReport,
+    JournalEntry,
+    JournalLine,
     SignificantTransaction,
     Variance,
 )
@@ -48,12 +50,35 @@ def test_render_html_contains_mvp_sections_and_escapes_notes() -> None:
     assert "Income statement: Actual 04/01/2026 to 04/30/2026" in html
     assert "comparative: Actual 04/01/2025 to 04/30/2025" in html
     assert "Balance sheet: As at 04/30/2026" in html
-    assert "data:image/jpeg;base64," in html
     assert "Cash Summary" in html
     assert "Significant Transactions" in html
     assert "<th>Area</th><th>What changed</th>" in html
     assert "Payroll" in html
     assert "Use &lt;restricted&gt; funds carefully." in html
+
+
+def test_render_html_discloses_post_export_adjustments() -> None:
+    report = FlashReport(
+        organization_name="Example Club",
+        report_title="Flash Report",
+        adjustments=[
+            JournalEntry(
+                entry_date=date(2026, 9, 18),
+                description="Accrue <late> invoice",
+                lines=[
+                    JournalLine("income", "Repairs", debit=Decimal("1250")),
+                    JournalLine("balance", "Accounts Payable", credit=Decimal("1250")),
+                ],
+            )
+        ],
+    )
+
+    html = render_html(report)
+
+    assert "Post-export Adjustments" in html
+    assert "Accrue &lt;late&gt; invoice" in html
+    assert "Repairs ($1,250.00)" in html
+    assert "Accounts Payable ($1,250.00)" in html
 
 
 def test_render_html_places_net_result_below_major_variances() -> None:

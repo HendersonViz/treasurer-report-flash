@@ -29,6 +29,7 @@ def render_html(report: FlashReport) -> str:
     logo = _sample_logo() if report.sample_badge else _logo_image()
     page_title = _page_title(report)
     cash_summary = _cash_summary_table(report.cash_summary)
+    adjustments = _adjustments_table(report)
     significant_transactions = _significant_transactions_table(report.significant_transactions)
     risks = _list_items(report.risks_and_issues, "No risks or issues flagged.")
     decisions = _list_items(report.decisions_needed, "No board decisions identified.")
@@ -133,6 +134,7 @@ def render_html(report: FlashReport) -> str:
   {periods}
   {executive_snapshot}
   {notes}
+  {adjustments}
   <section class="summary">
     <div class="card"><span>Cash position</span><span class="amount">{_currency(cash)}</span></div>
     <div class="card"><span>Revenue</span><span class="amount">{_currency(revenue)}</span></div>
@@ -166,7 +168,13 @@ def render_html(report: FlashReport) -> str:
 
 
 def write_pdf(report: FlashReport, output_path: str | Path) -> None:
-    from weasyprint import HTML
+    try:
+        from weasyprint import HTML
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            'PDF support is not installed. The HTML report is still available. '
+            'Install it with: python -m pip install -e ".[pdf]"'
+        ) from exc
 
     HTML(string=render_html(report)).write_pdf(output_path)
 
@@ -262,6 +270,37 @@ def _cash_summary_table(lines: list[CashSummaryLine]) -> str:
         "<thead><tr><th>Cash Summary</th><th>Current</th><th>Prior</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         "</table>"
+    )
+
+
+def _adjustments_table(report: FlashReport) -> str:
+    if not report.adjustments:
+        return ""
+    rows = []
+    for entry in report.adjustments:
+        debits = ", ".join(
+            f"{line.account} ({_currency(line.debit)})" for line in entry.lines if line.debit
+        )
+        credits = ", ".join(
+            f"{line.account} ({_currency(line.credit)})" for line in entry.lines if line.credit
+        )
+        amount = sum((line.debit for line in entry.lines), Decimal("0"))
+        rows.append(
+            "<tr>"
+            f"<td>{entry.entry_date.isoformat()}</td>"
+            f"<td>{escape(entry.description)}</td>"
+            f"<td>{escape(debits)}</td>"
+            f"<td>{escape(credits)}</td>"
+            f'<td class="number">{_currency(amount)}</td>'
+            "</tr>"
+        )
+    return (
+        "<section><h2>Post-export Adjustments</h2>"
+        "<p class=\"muted\">These entries were added after the Sage exports and are included "
+        "in the adjusted figures below.</p>"
+        "<table><thead><tr><th>Date</th><th>Description</th><th>Debits</th>"
+        "<th>Credits</th><th>Amount</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></section>"
     )
 
 

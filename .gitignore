@@ -26,6 +26,9 @@ venv/
 data/training/*
 !data/training/.gitkeep
 
+# Private board-meeting workspaces
+meetings/*/
+
 # Generated reports
 reports/out/
 *.pdf

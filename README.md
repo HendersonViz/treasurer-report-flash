@@ -29,6 +29,50 @@ python -m pip install -e ".[dev,pdf]"
 
 ## CLI MVP
 
+### Recommended: one folder per board meeting
+
+Create a dated, private workspace:
+
+```bash
+make setup                         # first use only
+make new MEETING=2026-09-20
+```
+
+Drop the standard Sage `.xlsx` files into `meetings/2026-09-20/source/`. Their
+filenames do not matter: the report type is detected from the workbook itself.
+Edit the generated `report.yaml` to add Markdown notes, risks, decisions, and
+balanced post-export journal entries. Then run:
+
+```bash
+make doctor MEETING=2026-09-20
+make report MEETING=2026-09-20
+```
+
+The finished HTML and PDF reports are written to the meeting's `output/`
+folder. All dated meeting folders are ignored by git.
+
+An adjustment identifies detail accounts by their displayed statement labels:
+
+```yaml
+adjustments:
+  - date: 2026-09-18
+    description: Accrue an invoice received after the Sage export
+    lines:
+      - statement: income
+        account: Repairs and Maintenance
+        debit: 1250.00
+      - statement: balance
+        account: Accounts Payable
+        credit: 1250.00
+```
+
+Each entry must balance. Add `section` when the same account label appears more
+than once, or `normal_balance: debit|credit` for an unusual or contra account.
+The adjusted figures are used throughout the report and the entry appears in a
+board-facing adjustment table. Source workbooks are never changed.
+
+### Legacy folder workflow
+
 Put the standard Sage dump files in one folder:
 
 - `IncomeApr26.xlsx`
@@ -65,7 +109,7 @@ treasurer-flash-report --input-dir data/training --deliverable both
 Outputs default to `reports/out/flash-report.html` and
 `reports/out/flash-report.pdf`. Use `--output-dir` to change the folder, or
 advanced overrides like `--income`, `--balance`, `--notes`, `--output`, and
-`--ledger`, `--output`, and `--pdf` when needed.
+`--ledger` and `--pdf` when needed.
 
 ## Shortcuts
 

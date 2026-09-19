@@ -3,10 +3,12 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
+from .adjustments import apply_journal_entries
 from .models import (
     CashSummaryLine,
     ComparativeLine,
     FlashReport,
+    JournalEntry,
     LedgerEntry,
     SignificantTransaction,
     Variance,
@@ -31,6 +33,11 @@ def build_flash_report(
     ledger_path: Path | None = None,
     variance_amount_threshold: Decimal = DEFAULT_VARIANCE_AMOUNT_THRESHOLD,
     variance_percent_threshold: Decimal = DEFAULT_VARIANCE_PERCENT_THRESHOLD,
+    executive_snapshot_markdown: str | None = None,
+    notes_markdown: str | None = None,
+    manual_risks: list[str] | None = None,
+    manual_decisions: list[str] | None = None,
+    adjustments: list[JournalEntry] | None = None,
 ) -> FlashReport:
     parser = Sage50WorkbookParser()
     organization_name, income_title = parser.read_report_heading(income_path)
@@ -42,10 +49,18 @@ def build_flash_report(
     income_statement = parser.parse_income_statement(income_path)
     balance_sheet = parser.parse_balance_sheet(balance_path)
     ledger_entries = parser.parse_general_ledger(ledger_path) if ledger_path is not None else []
-    notes_markdown = read_notes_content(notes_path)
-    snapshot_markdown, treasurer_notes_markdown = extract_named_markdown_section(
-        notes_markdown, {"executive snapshot"}
+    adjustment_entries = adjustments or []
+    income_statement, balance_sheet = apply_journal_entries(
+        income_statement, balance_sheet, adjustment_entries
     )
+    if executive_snapshot_markdown is None and notes_markdown is None:
+        legacy_notes_markdown = read_notes_content(notes_path)
+        snapshot_markdown, treasurer_notes_markdown = extract_named_markdown_section(
+            legacy_notes_markdown, {"executive snapshot"}
+        )
+    else:
+        snapshot_markdown = executive_snapshot_markdown or ""
+        treasurer_notes_markdown = notes_markdown or ""
     notes = extract_plain_notes(treasurer_notes_markdown)
     variance_groups = find_major_variance_groups(
         income_statement,
@@ -72,9 +87,14 @@ def build_flash_report(
         major_variances=variances,
         major_variance_groups=variance_groups,
         ledger_entries=ledger_entries,
+        adjustments=adjustment_entries,
     )
-    report.risks_and_issues = build_risks_and_issues(report)
-    report.decisions_needed = build_decisions_needed(notes)
+    report.risks_and_issues = _merge_manual_and_automatic(
+        manual_risks or [], build_risks_and_issues(report), "No major financial risks"
+    )
+    report.decisions_needed = _merge_manual_and_automatic(
+        manual_decisions or [], build_decisions_needed(notes), "No board decisions"
+    )
     report.commentary = build_commentary(report)
     if not report.executive_snapshot:
         report.executive_snapshot = build_executive_snapshot(report)
@@ -527,3 +547,19 @@ def _display_label(label: str) -> str:
     if stripped.upper().startswith("TOTAL "):
         return stripped[6:].title()
     return stripped
+
+
+def _merge_manual_and_automatic(
+    manual: list[str], automatic: list[str], empty_prefix: str
+) -> list[str]:
+    combined = [*manual, *(item for item in automatic if not item.startswith(empty_prefix))]
+    unique: list[str] = []
+    seen: set[str] = set()
+    for item in combined:
+        key = " ".join(item.split()).casefold()
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    if unique:
+        return unique
+    return automatic
